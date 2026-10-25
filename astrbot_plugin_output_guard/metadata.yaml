@@ -1,0 +1,7 @@
+name: "astrbot_plugin_output_guard"
+display_name: "输出审查"
+desc: "在每条回复真正发送前做最后一次审查：可配置关键词/正则规则、可选的 AI 审查，以及人工放行或拒绝。"
+short_desc: "回复发出前的最后一道审查，规则、AI、人工三重把关。"
+version: "v1.1.0"
+author: "DSH"
+astrbot_version: ">=4.29"

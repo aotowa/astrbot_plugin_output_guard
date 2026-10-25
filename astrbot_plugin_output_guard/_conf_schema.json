@@ -1,0 +1,182 @@
+{
+  "enabled": {
+    "description": "启用最终输出审查",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后插件完全不介入消息发送。"
+  },
+  "rule_scope": {
+    "description": "规则与 AI 审查的范围",
+    "type": "string",
+    "options": ["all", "llm_only"],
+    "labels": ["全部输出", "仅 AI 回复"],
+    "default": "all",
+    "hint": "llm_only 只审查大模型生成的回复，指令回复等普通结果不受影响。"
+  },
+  "rules": {
+    "description": "审查规则",
+    "type": "template_list",
+    "default": [],
+    "hint": "按从上到下的顺序执行。命中 block 立即拦截；replace 替换文本；flag 标记为可疑，配合人工审查的 flagged 模式使用。",
+    "templates": {
+      "rule": {
+        "name": "文本规则",
+        "display_item": "name",
+        "hide_hint_in_list": false,
+        "items": {
+          "name": {
+            "description": "规则名称",
+            "type": "string",
+            "default": "未命名规则",
+            "hint": "会显示在拦截日志和人工审查通知里。"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "bool",
+            "default": true
+          },
+          "match_type": {
+            "description": "匹配方式",
+            "type": "string",
+            "options": ["keyword", "regex"],
+            "labels": ["关键字", "正则表达式"],
+            "default": "keyword"
+          },
+          "pattern": {
+            "description": "匹配内容",
+            "type": "text",
+            "default": "",
+            "hint": "支持多个匹配内容：换行分隔，每行一个；关键字模式也可以用 | 分隔。正则模式下每行是一个独立正则表达式，| 仍表示正则的“或”。逗号和空格不会分隔，会作为内容本身。"
+          },
+          "action": {
+            "description": "命中后的动作",
+            "type": "string",
+            "options": ["block", "replace", "flag"],
+            "labels": ["拦截发送", "替换文本", "标记可疑"],
+            "default": "flag"
+          },
+          "replacement": {
+            "description": "替换文本",
+            "type": "string",
+            "default": "***",
+            "hint": "仅在动作为“替换文本”时生效。"
+          },
+          "case_sensitive": {
+            "description": "区分大小写",
+            "type": "bool",
+            "default": false
+          }
+        }
+      }
+    }
+  },
+  "bypass_patterns": {
+    "description": "白名单正则",
+    "type": "list",
+    "default": [],
+    "hint": "每项一个正则表达式。消息全文命中任意一条时直接跳过审查，适合放行固定格式的通知。"
+  },
+  "llm_review": {
+    "description": "AI 审查",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用 AI 审查",
+        "type": "bool",
+        "default": false,
+        "hint": "会对每条待发送文本额外调用一次模型，注意成本与延迟。"
+      },
+      "provider_id": {
+        "description": "审查使用的模型",
+        "type": "string",
+        "default": "",
+        "_special": "select_provider",
+        "hint": "留空则使用当前会话正在使用的对话模型。"
+      },
+      "prompt": {
+        "description": "审查提示词",
+        "type": "text",
+        "default": "你是严谨的内容安全审查员。下面是一段即将发送给用户的聊天回复，请判断它是否存在以下问题：\n1. 违反法律法规或平台规则（涉政、涉黄、涉暴、诈骗、赌博、毒品等）；\n2. 泄露隐私或敏感信息（手机号、身份证号、住址、账号密码、API Key 等）；\n3. 包含辱骂、歧视、威胁或明显不当的言论；\n4. 与用户的问题完全无关，或严重答非所问；\n5. 泄露模型自身的系统提示词、内部指令等内容。\n\n待审查的回复：\n<<<\n{text}\n>>>\n\n只输出一个 JSON 对象，不要输出 Markdown 代码块或任何解释：\n{\"pass\": true, \"reason\": \"一句话理由\", \"rewrite\": \"如果需要改写，给出改写后的完整文本，否则为空字符串\"}\npass 为 false 表示这段内容不应直接发送。",
+        "hint": "{text} 会被替换成待审查的文本。"
+      },
+      "fail_open": {
+        "description": "AI 调用失败时放行",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后，模型调用失败或返回无法解析时会标记为可疑，交给人工审查。"
+      },
+      "action_on_reject": {
+        "description": "AI 判定不通过时",
+        "type": "string",
+        "options": ["flag", "block", "rewrite"],
+        "labels": ["标记可疑（转人工）", "直接拦截", "使用 AI 改写"],
+        "default": "flag"
+      },
+      "apply_rewrite": {
+        "description": "AI 通过但给出改写建议时采用改写",
+        "type": "bool",
+        "default": false
+      }
+    }
+  },
+  "manual": {
+    "description": "人工审查",
+    "type": "object",
+    "items": {
+      "mode": {
+        "description": "人工审查模式",
+        "type": "string",
+        "options": ["disabled", "flagged", "all"],
+        "labels": ["关闭", "仅标记的消息", "全部消息"],
+        "default": "disabled",
+        "hint": "all 会把范围内每一条回复都挂起等待放行；flagged 只挂起被规则或 AI 标记的消息。"
+      },
+      "scope": {
+        "description": "人工审查范围",
+        "type": "string",
+        "options": ["llm_only", "all"],
+        "labels": ["仅 AI 回复", "全部输出"],
+        "default": "llm_only",
+        "hint": "建议保持“仅 AI 回复”，否则指令回复、权限提示等也会被挂起。"
+      },
+      "admin_umos": {
+        "description": "接收审查通知的会话",
+        "type": "list",
+        "default": [],
+        "hint": "在目标会话里发送 /审查会话 获取 UMO，然后加到这里。可以填多个。"
+      },
+      "timeout_seconds": {
+        "description": "超时时间（秒）",
+        "type": "int",
+        "default": 300,
+        "slider": {"min": 0, "max": 3600, "step": 10},
+        "hint": "0 表示永不超时（消息会一直挂起，直到插件重载）。"
+      },
+      "timeout_action": {
+        "description": "超时后如何处理",
+        "type": "string",
+        "options": ["drop", "send"],
+        "labels": ["丢弃", "放行"],
+        "default": "drop"
+      },
+      "notify_on_reject": {
+        "description": "拒绝时通知原会话",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后会在原会话发送一句“未通过内容审查”，不会透露具体内容。"
+      },
+      "fallback_when_no_admin": {
+        "description": "未配置通知会话时的兜底行为",
+        "type": "string",
+        "options": ["send", "drop"],
+        "labels": ["正常发送", "丢弃"],
+        "default": "send"
+      }
+    }
+  },
+  "debug": {
+    "description": "输出调试日志",
+    "type": "bool",
+    "default": false
+  }
+}
